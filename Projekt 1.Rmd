@@ -1,6 +1,6 @@
 ---
 title: "Projekt 1 - Statystyczna analiza danych"
-author: "Klaudia Rajca, Aleksandra Konopelska"
+author: "K.R, A.Konopelska"
 date: "2025-10-17"
 output:
   html_document:
@@ -424,4 +424,5 @@ Obie metody wykazały wyraźny podział świata na kilka poziomów rozwoju — o
 ## Zakończenie
 
 Przeprowadzona analiza pokazała, że metody statystyczne, takie jak porządkowanie liniowe i analiza skupień, pozwalają w sposób przejrzysty i obiektywny klasyfikować kraje świata według poziomu rozwoju. Wyniki uzyskane różnymi podejściami są spójne, co potwierdza ich rzetelność. Projekt stanowi przykład praktycznego zastosowania metod ilościowych w analizie zjawisk społeczno-gospodarczych i może być podstawą do dalszych badań nad rozwojem krajów.
+
 
