@@ -1,0 +1,427 @@
+---
+title: "Projekt 1 - Statystyczna analiza danych"
+author: "Klaudia Rajca, Aleksandra Konopelska"
+date: "2025-10-17"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    number_sections: true
+    theme: cosmo
+    highlight: tango
+    css: "style.css"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+---
+
+# ETAP I: Przygotowanie danych do projektu
+
+## Temat projektu: Ocena poziomu rozwoju społeczno-gospodarczego państw świata
+
+Celem projektu jest przeprowadzenie analizy porównawczej krajów świata pod względem wybranych wskaźników społeczno-ekonomicznych. Analiza obejmuje dwa etapy: porządkowanie liniowe oraz analizę skupień. W ramach porządkowania liniowego zostanie utworzony ranking krajów w oparciu o syntetyczny miernik rozwoju, natomiast analiza skupień pozwoli na identyfikację grup państw o podobnym poziomie rozwoju.  
+
+Dane pochodzą z pliku „countries of the world.csv”, opracowanego na podstawie źródeł rządowych USA (US Government), obejmujących lata 1970–2017. Oznacza to, że dane nie dotyczą jednego konkretnego roku, lecz stanowią zestaw uśrednionych i orientacyjnych wskaźników opisujących sytuację społeczno-gospodarczą poszczególnych państw.  W analizie przyjmujemy je jako dane przekrojowe (dla różnych krajów w tym samym momencie), co umożliwia ich wykorzystanie w metodach statystycznych, takich jak porządkowanie liniowe i analiza skupień.
+
+## Porządkowanie liniowe i Analiza skupień
+
+Porządkowanie liniowe to metoda, która na podstawie różnych cech przypisuje obiektom kolejność, tworząc ranking, np. od najlepszego do najgorszego. Analiza skupień natomiast grupuje obiekty w zbiory (skupienia) na podstawie ich podobieństwa, tak aby obiekty w jednym skupieniu były do siebie jak najbardziej podobne, a różniły się od obiektów z innych skupień. Chociaż obu metod można używać do klasyfikacji, porządkowanie liniowe tworzy jedną oś, podczas gdy analiza skupień tworzy wiele grup. 
+
+## Wczytanie danych
+```{r}
+dane <- read.csv("countries of the world.csv", sep = ",", stringsAsFactors = FALSE)
+```
+
+## Podgląd pierwszych wierszy danych
+```{r}
+head(dane)
+```
+
+## Przygotowanie danych
+```{r}
+# Usunięcie kolumn tekstowych (Country, Region)
+if (all(c("Country", "Region") %in% names(dane))) {
+  dane <- subset(dane, select = -c(Country, Region))
+}
+
+
+# Zamiana przecinków na kropki w kolumnach liczbowych
+dane[] <- lapply(dane, function(x) {
+  if (is.character(x)) as.numeric(gsub(",", ".", x)) else x
+})
+
+# Usunięcie braków danych
+dane <- na.omit(dane)
+
+# Wybór najważniejszych zmiennych ilościowych
+zmienne <- c("GDP....per.capita.", "Literacy....", "Phones..per.1000.",
+             "Infant.mortality..per.1000.births.", "Birthrate", "Deathrate",
+             "Industry", "Service", "Climate")
+
+dane_wybrane <- dane[intersect(zmienne, names(dane))]
+
+# Sprawdzenie struktury danych
+str(dane_wybrane)
+```
+
+# ETAP II: Wstępna analiza danych
+
+## Podstawowe statystyki opisowe
+```{r}
+summary(dane_wybrane)
+```
+
+## Współczynniki zmienności (CV) przed standaryzacją
+```{r}
+cv_przed <- apply(dane_wybrane, 2, sd, na.rm = TRUE) /
+             abs(apply(dane_wybrane, 2, mean, na.rm = TRUE))
+round(cv_przed, 2)
+```
+
+## Standaryzacja danych
+
+## Dane standaryzowane metodą z-score
+```{r}
+dane_stand <- scale(dane_wybrane)
+
+# Podsumowanie wystandaryzowanych danych
+summary(dane_stand)
+```
+
+## Analiza korelacji
+
+## Macierz korelacji (Pearsona: zależności między dwiema zmiennymi ciągłymi)
+
+Analiza korelacji Pearsona pokazuje zależności między wskaźnikami opisującymi poziom rozwoju krajów.Dodatnia korelacja (+) oznacza, że wartości dwóch zmiennych rosną razem, a ujemna (_), że wzrost jednej wiąże się ze spadkiem drugiej.
+
+```{r}
+macierz_korelacji <- cor(dane_stand, use = "pairwise.complete.obs", method = "pearson")
+round(macierz_korelacji, 2)
+```
+
+* PKB per capita, alfabetyzacja i liczba telefonów są silnie dodatnio skorelowane, co wskazuje, że bogatsze kraje mają lepszy dostęp do edukacji i technologii.
+* Śmiertelność niemowląt i współczynnik urodzeń są ujemnie skorelowane z PKB i edukacją – w krajach rozwiniętych te wartości są niższe.
+* Sektor usług umiarkowanie rośnie wraz z PKB, natomiast przemysł i klimat są słabo powiązane z innymi zmiennymi.
+
+Ogólnie zmienne są zróżnicowane: część jest silnie powiązana, a część niezależna, co jest korzystne dla dalszych analiz, takich jak porządkowanie liniowe i analiza skupień.
+
+
+## Wizualizacja macierzy korelacji
+```{r}
+if (!require(corrplot)) install.packages("corrplot")
+library(corrplot)
+
+corrplot(macierz_korelacji,
+method = "color",
+tl.cex = 0.8,
+tl.col = "black", # czarne podpisy, lepiej widoczne
+col = colorRampPalette(c("darkblue", "white", "darkred"))(200),
+cl.cex = 0.8, # wielkość napisów na legendzie
+cl.pos = "r", # legenda po prawej stronie
+mar = c(0,0,2,2),
+title = "Macierz korelacji między zmiennymi")
+```
+
+Legenda kolorów:
+
+| Kolor | Znaczenie |
+|:------|:-----------|
+| Ciemnoniebieski | silna ujemna korelacja (wartości bliskie -1) – gdy jedna zmienna rośnie, druga maleje. |
+| Biały / jasny | brak korelacji (wartości bliskie 0) – zmienne niezależne. |
+| Ciemnoczerwony | silna dodatnia korelacja (wartości bliskie +1) – gdy jedna zmienna rośnie, druga także. |
+
+
+W analizie korelacji zaobserwowano silne dodatnie zależności pomiędzy zmiennymi ekonomicznymi (PKB, alfabetyzacja, liczba telefonów), co potwierdza, że rozwój gospodarczy wiąże się z wyższym poziomem edukacji i dostępem do infrastruktury. Jednocześnie występują silne ujemne korelacje z wskaźnikami demograficznymi (urodzenia, śmiertelność niemowląt), charakterystyczne dla krajów o niższym poziomie rozwoju. Zmienna „Climate” ma niewielki wpływ na te relacje. Zróżnicowany poziom korelacji wskazuje, że zestaw zmiennych jest dobrze dopasowany do dalszych analiz porządkowania liniowego i skupień.
+
+
+## Zapis oczyszczonych i wystandaryzowanych danych
+```{r}
+write.csv(as.data.frame(dane_stand), "countries_clean_scaled.csv", row.names = FALSE)
+```
+
+## Wnioski z Etapu I
+
+Dane są odpowiednio przygotowane do dalszych etapów projektu. Większość zmiennych wykazuje znaczną zmienność (CV > 0,3), co oznacza, że mogą być użyte do porządkowania liniowego i analizy skupień. Występują silne korelacje między zmiennymi ekonomicznymi (PKB, liczba telefonów, alfabetyzacja), co wskazuje na powiązania między rozwojem gospodarczym a poziomem infrastruktury i edukacji. Zmienna „Climate” wykazuje słabsze zależności, co sugeruje mniejsze znaczenie czynników środowiskowych.
+
+
+---
+
+# ETAP III: Porządkowanie liniowe – ocena poziomu rozwoju krajów
+
+Celem tego etapu jest utworzenie rankingu krajów świata na podstawie wybranych zmiennych społeczno-ekonomicznych. Wykorzystane zostaną dwie metody: bezwzorcowa i wzorcowa (metoda Hellwiga).
+
+## Metoda wzorcowa i bezwzorcowa
+* Metoda bezwzorcowa – tworzy ranking krajów na podstawie średniej ze standaryzowanych wskaźników (czyli mają średnią 0 i odchylenie 1). Im wyższa wartość, tym kraj bardziej rozwinięty.
+
+* Metoda wzorcowa (Hellwiga) – porównuje każdy kraj z „krajem idealnym” mającym najlepsze wartości wszystkich cech. Im bliżej wzorca (większy wynik), tym wyższy poziom rozwoju.
+
+## Przygotowanie danych do porządkowania liniowego
+```{r}
+# Użycie wystandaryzowanych danych z etapu 1
+dane_lin <- as.data.frame(dane_stand)
+```
+
+```{r}
+# Określenie stymulant (im więcej, tym lepiej)
+stymulanty <- c("GDP....per.capita.", "Literacy....", "Phones..per.1000.", 
+                "Industry", "Service", "Climate")
+```
+
+```{r}
+# Określenie destymulant (im więcej, tym gorzej)
+destymulanty <- c("Infant.mortality..per.1000.births.", "Birthrate", "Deathrate")
+```
+
+```{r}
+# Zamiana destymulant na stymulanty (mnożenie przez -1)
+dane_lin[destymulanty] <- dane_lin[destymulanty] * (-1)
+```
+
+## Metoda bezwzorcowa
+
+```{r}
+# Miernik syntetyczny = średnia arytmetyczna wystandaryzowanych wartości
+
+dane_lin$miara_bezwzorcowa <- apply(dane_lin, 1, mean)
+
+# Ranking krajów
+
+ranking_bez <- dane_lin[order(-dane_lin$miara_bezwzorcowa), "miara_bezwzorcowa"]
+head(ranking_bez)
+```
+
+Najwyższe wartości miary bezwzorcowej (ok. 1.2) mają kraje wysoko rozwinięte – z wysokim PKB, dobrą edukacją i niską śmiertelnością niemowląt. Niższe wartości oznaczają kraje słabiej rozwinięte. Miara pokazuje ogólny poziom rozwoju – im wyższa, tym lepiej.
+
+## Metoda wzorcowa (Hellwiga)
+```{r}
+# Wyznaczenie wzorca – maksymalne wartości zmiennych
+
+wzorzec <- apply(dane_lin[, zmienne], 2, max)
+
+# Obliczenie odległości euklidesowej od wzorca
+
+distanse <- apply(dane_lin[, zmienne], 1, function(x) sqrt(sum((wzorzec - x)^2)))
+
+# Wyznaczenie miernika Hellwiga
+
+d0 <- mean(distanse) + 2 * sd(distanse)
+miara_wzorcowa <- 1 - (distanse / d0)
+miara_wzorcowa[miara_wzorcowa < 0] <- 0
+
+# Dodanie do ramki danych
+
+dane_lin$miara_wzorcowa <- miara_wzorcowa
+
+# Ranking wg metody Hellwiga
+
+ranking_wz <- dane_lin[order(-dane_lin$miara_wzorcowa), "miara_wzorcowa"]
+head(ranking_wz)
+```
+
+Najwyższe wartości miernika Hellwiga (ok. 0.56) uzyskały kraje najlepiej rozwinięte – o wysokim PKB, dobrej edukacji i niskiej śmiertelności niemowląt. Niższe wartości oznaczają kraje słabiej rozwinięte, bardziej oddalone od wzorca. Metoda Hellwiga potwierdza wyniki metody bezwzorcowej – ranking krajów jest bardzo podobny.
+
+## Porównanie metod i korelacja rankingów
+
+```{r}
+# Korelacja między rankingami
+
+cor(dane_lin$miara_bezwzorcowa, dane_lin$miara_wzorcowa)
+
+# Wykres porównawczy
+
+if(!require(ggplot2)) install.packages("ggplot2")
+library(ggplot2)
+
+ggplot(dane_lin, aes(x = miara_bezwzorcowa, y = miara_wzorcowa)) +
+geom_point(color = "steelblue") +
+geom_smooth(method = "lm", se = FALSE, color = "red") +
+labs(title = "Porównanie metod porządkowania liniowego",
+x = "Miara bezwzorcowa",
+y = "Miara wzorcowa (Hellwig)") +
+theme_minimal()
+```
+
+## Wnioski z porządkowania liniowego
+
+Obie metody dają bardzo zbliżone wyniki — punkty na wykresie leżą blisko linii trendu, a korelacja między miarami wynosi 0.9804826 (≈ 0,98).
+Oznacza to, że zarówno metoda bezwzorcowa, jak i metoda wzorcowa Hellwiga porządkują kraje w podobny sposób, co świadczy o spójności i stabilności wyników.
+
+Niewielkie różnice wynikają z faktu, że metoda Hellwiga dodatkowo uwzględnia odległość od wzorca idealnego, przez co lepiej różnicuje kraje o średnim poziomie rozwoju.
+
+Wysoka korelacja między metodami potwierdza, że dane są dobrze dobrane, a obie metody opisują to samo zjawisko – poziom rozwoju społeczno-gospodarczego państw. Dzięki temu można uznać, że uzyskane rankingi są wiarygodne i możliwe do dalszej interpretacji w kolejnych etapach projektu.
+
+---
+
+# ETAP IV: Analiza skupień (klasteryzacja)
+
+## Cel etapu
+Celem tego etapu jest podział krajów świata na grupy (klastry) o podobnym poziomie rozwoju społeczno-gospodarczego. Analiza skupień pozwala wykryć kraje o zbliżonej strukturze gospodarczej, edukacyjnej i demograficznej, opierając się na wystandaryzowanych danych z etapu 1.
+
+## Przygotowanie danych
+```{r}
+dane_cluster <- as.data.frame(dane_stand)
+```
+
+## Dobór liczby skupień (metoda łokcia)
+
+Metoda łokcia pozwala określić optymalną liczbę grup poprzez analizę spadku wariancji wewnątrz skupień. Optymalna liczba k odpowiada punktowi, w którym dalsze zwiększanie liczby grup nie przynosi znaczącej poprawy.
+
+```{r}
+if(!require(factoextra)) install.packages("factoextra")
+library(factoextra)
+
+fviz_nbclust(dane_cluster, kmeans, method = "wss") +
+labs(title = "Dobór optymalnej liczby skupień (metoda łokcia)",
+x = "Liczba skupień (k)",
+y = "Suma kwadratów odchyleń wewnątrz skupień")
+```
+
+Na wykresie widać, że wraz ze wzrostem liczby skupień (k) suma kwadratów odchyleń wewnątrz grup (WSS) maleje – oznacza to, że podział danych staje się coraz dokładniejszy. Jednak po wartości k = 4 tempo spadku wyraźnie się spowalnia – krzywa „zagina się”, tworząc charakterystyczny „łokieć”.
+
+Na podstawie wykresu łokcia mozna uznać że k = 4 to optymalna liczba skupień. Oznacza to, że dane najlepiej opisują cztery wyraźne grupy krajów o różnym poziomie rozwoju społeczno-gospodarczego.
+
+
+## Metoda podziałowa – k-means
+
+Metoda k-means dzieli kraje na k grup tak, aby w każdej znalazły się państwa najbardziej do siebie podobne, a różnice między grupami były jak największe.
+
+```{r}
+set.seed(123)
+kmeans_model <- kmeans(dane_cluster, centers = 4, nstart = 25)
+
+fviz_cluster(kmeans_model, data = dane_cluster,
+main = "Wizualizacja skupień – metoda k-means",
+geom = "point",
+ellipse.type = "norm",
+palette = "Set2")
+```
+
+Wykres przedstawia cztery skupienia (klastry) krajów o podobnym poziomie rozwoju społeczno-gospodarczego. Każdy kolor reprezentuje jedną grupę, a elipsy pokazują obszar, w którym znajdują się kraje najbardziej do siebie podobne.
+Widoczny jest wyraźny podział – grupy są stosunkowo dobrze rozdzielone, co oznacza, że metoda k-means skutecznie wykryła różnice między krajami.
+
+## Metoda hierarchiczna – Ward
+
+Metoda hierarchiczna (Ward) tworzy skupienia stopniowo, łącząc najbardziej podobne jednostki w większe grupy.
+
+```{r}
+dystans <- dist(dane_cluster, method = "euclidean")
+hclust_model <- hclust(dystans, method = "ward.D2")
+
+plot(hclust_model, main = "Dendrogram – metoda hierarchiczna (Ward)", cex = 0.6)
+rect.hclust(hclust_model, k = 4, border = "red")
+```
+
+Dendrogram przedstawia proces łączenia krajów w coraz większe grupy na podstawie ich podobieństwa.
+Na osi pionowej (Height) widoczny jest poziom różnic między skupieniami – im wyżej połączenie, tym większe różnice między grupami.
+
+Czerwoną linią zaznaczono podział na cztery klastry (grupy), co jest zgodne z wynikiem metody k-means.
+
+## Przypisanie krajów do grup i porównanie metod
+```{r}
+grupy_hier <- cutree(hclust_model, k = 4)
+table(grupy_hier)
+
+table(kmeans_model$cluster, grupy_hier)
+```
+
+
+## Charakterystyka skupień
+
+Średnie wartości zmiennych w poszczególnych klastrach pozwalają opisać profil każdego z nich.
+
+```{r}
+grupy_hier <- cutree(hclust_model, k = 4)
+table(grupy_hier)
+
+table(kmeans_model$cluster, grupy_hier)
+```
+
+## Wnioski z analizy skupień
+
+1. W analizie skupień zastosowano dwie metody: k-means i hierarchiczną (Ward). Celem było pogrupowanie krajów o podobnym poziomie rozwoju społeczno-gospodarczego.
+
+2. Dobór liczby skupień (metoda łokcia)
+Na wykresie „łokcia” widać, że spadek wariancji wewnątrz grup znacząco zwalnia po k = 4, co wskazuje, że cztery klastry są optymalnym podziałem danych.
+
+3. Metoda k-means
+Algorytm k-means podzielił kraje na cztery grupy, dobrze od siebie oddzielone na wykresie.
+
+* Grupa 1 – kraje wysoko rozwinięte (wysokie PKB, wysoka alfabetyzacja, niski przyrost naturalny).
+
+* Grupy 2–3 – kraje o średnim poziomie rozwoju.
+
+* Grupa 4 – kraje najsłabiej rozwinięte (niski PKB, wysoka śmiertelność niemowląt).
+
+4. Metoda hierarchiczna (Ward)
+Dendrogram również sugeruje cztery wyraźne skupienia, co potwierdza wyniki k-means.
+Obie metody wykazały zbliżony podział, co świadczy o stabilności i wiarygodności wyników.
+
+5. Porównanie metod
+Tabela zgodności pokazuje, że podziały z metod k-means i Ward są bardzo podobne — większość krajów została przypisana do tych samych grup.
+
+---
+
+# ETAP V: Podsumowanie i interpretacja wyników
+
+Celem projektu było porównanie krajów świata pod względem poziomu rozwoju społeczno-gospodarczego z wykorzystaniem dwóch metod analizy wielowymiarowej: porządkowania liniowego oraz analizy skupień.  
+
+W projekcie wykorzystano dane z pliku countries of the world.csv, zawierające wskaźniki takie jak: PKB per capita, alfabetyzacja, liczba telefonów, śmiertelność niemowląt, przyrost naturalny, udział przemysłu i usług w PKB oraz klimat. Dane zostały oczyszczone, wystandaryzowane i poddane dalszej analizie.
+
+
+## Wyniki porządkowania liniowego
+
+W ramach porządkowania liniowego zastosowano dwie metody:  
+- metodę bezwzorcową (średnia ze znormalizowanych wartości),  
+- metodę wzorcową (Hellwiga), która porównuje każdy kraj z krajem idealnym.  
+
+Obie metody dały bardzo zbliżone wyniki – współczynnik korelacji między rankingami wyniósł 0,98, co wskazuje na wysoką zgodność ocen.  
+Najwyższe pozycje w rankingu zajęły kraje wysoko rozwinięte (o wysokim PKB, wysokiej alfabetyzacji i niskiej śmiertelności niemowląt), natomiast na końcu znalazły się kraje rozwijające się i najsłabiej rozwinięte.  
+
+Metoda Hellwiga pozwoliła nieco lepiej różnicować kraje o średnim poziomie rozwoju, dzięki uwzględnieniu odległości od wzorca.  
+
+
+## Wyniki analizy skupień
+
+Zastosowano dwie metody grupowania:  
+- k-means (metoda podziałowa),  
+- metodę hierarchiczną (Ward).  
+
+Na podstawie wykresu „łokcia” za optymalną uznano liczbę czterech skupień (k = 4).  
+Obie metody dały bardzo podobny podział krajów na grupy, co potwierdza stabilność wyników.  
+
+Charakterystyka skupień:
+- Grupa 1 – kraje wysoko rozwinięte (wysokie PKB, niska śmiertelność, duży udział usług).  
+- Grupa 2 – kraje średnio rozwinięte, w fazie transformacji.  
+- Grupa 3 – kraje o umiarkowanym poziomie rozwoju, często z przewagą sektora przemysłowego.  
+- Grupa 4 – kraje słabo rozwinięte (niski PKB, wysoka śmiertelność niemowląt, wysoki przyrost naturalny).  
+
+Podział jest zgodny z intuicją i potwierdza globalne zróżnicowanie poziomu rozwoju społeczno-gospodarczego.
+
+
+## Porównanie wyników metod
+
+Porównanie metod porządkowania i skupień pokazuje spójność rezultatów: kraje z najwyższych miejsc w rankingu tworzą odrębny klaster krajów rozwiniętych, a kraje o najniższych ocenach skupiają się w grupach o najgorszych wynikach.  
+
+Oznacza to, że wyniki porządkowania liniowego i analizy skupień wzajemnie się potwierdzają.  
+Obie metody wykazały wyraźny podział świata na kilka poziomów rozwoju — od krajów wysoko rozwiniętych po kraje ubogie.  
+
+
+## Wnioski końcowe
+
+1. Zastosowane metody umożliwiły ocenę i klasyfikację krajów pod względem poziomu rozwoju społeczno-gospodarczego.  
+2. Obie techniki porządkowania liniowego (bezwzorcowa i Hellwiga) dały zbieżne wyniki, co świadczy o ich wiarygodności.  
+3. Analiza skupień potwierdziła istnienie czterech głównych grup krajów, zróżnicowanych pod względem badanych cech.  
+4. Wyniki obu podejść są spójne – kraje wysoko rozwinięte osiągały najwyższe wartości miar syntetycznych i jednocześnie tworzyły odrębny klaster.  
+5. Projekt potwierdził, że dane społeczno-gospodarcze w sposób czytelny odzwierciedlają globalne różnice w poziomie rozwoju i mogą być skutecznie analizowane z wykorzystaniem metod statystycznych.  
+
+
+## Zakończenie
+
+Przeprowadzona analiza pokazała, że metody statystyczne, takie jak porządkowanie liniowe i analiza skupień, pozwalają w sposób przejrzysty i obiektywny klasyfikować kraje świata według poziomu rozwoju. Wyniki uzyskane różnymi podejściami są spójne, co potwierdza ich rzetelność. Projekt stanowi przykład praktycznego zastosowania metod ilościowych w analizie zjawisk społeczno-gospodarczych i może być podstawą do dalszych badań nad rozwojem krajów.
+
